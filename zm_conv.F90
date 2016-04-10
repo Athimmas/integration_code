@@ -3394,7 +3394,7 @@ call omp_set_dynamic(.false.)
 
 totalLoopStartTime = omp_get_wtime()
 
-!$omp parallel do default(shared) firstprivate(lwmax,dmpdp,dmpdz,dpdz,dzdp,senv,qtenv,penv,tenv,new_s,new_q,dp,tfguess,tscool,qxsk,qxskp1,dsdp,dqtdp,dqxsdp,slcl,qtlcl,qslcl,rcall,nit_lheat) num_threads(NUM_THREADS) schedule(static)
+!$omp parallel do default(shared) firstprivate(lwmax,dmpdp,dmpdz,dpdz,dzdp,senv,qtenv,penv,tenv,new_s,new_q,dp,tfguess,tscool,qxsk,qxskp1,dsdp,dqtdp,dqxsdp,slcl,qtlcl,qslcl,rcall,nit_lheat) num_threads(NUM_THREADS) schedule(dynamic, 12)
     do i=1,ncol
      do k = pver, msg+1, -1
 ! Initialize parcel values at launch level.
@@ -3506,7 +3506,7 @@ ds_freeze = 0._r8
 !! Iterate solution twice for accuracy
 
 
-!$omp parallel do default(shared) firstprivate(lwmax,dmpdp,dmpdz,dpdz,dzdp,senv,qtenv,penv,tenv,new_s,new_q,dp,tfguess,tscool,qxsk,qxskp1,dsdp,dqtdp,dqxsdp,slcl,qtlcl,qslcl,rcall,nit_lheat) num_threads(NUM_THREADS) schedule(static)
+!$omp parallel do default(shared) firstprivate(lwmax,dmpdp,dmpdz,dpdz,dzdp,senv,qtenv,penv,tenv,new_s,new_q,dp,tfguess,tscool,qxsk,qxskp1,dsdp,dqtdp,dqxsdp,slcl,qtlcl,qslcl,rcall,nit_lheat) num_threads(NUM_THREADS) schedule(dynamic, 12)
     do i=1,ncol
      do k = pver, msg+1, -1
 ! Initialize variables at k=klaunch

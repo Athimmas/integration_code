@@ -9,6 +9,7 @@
   use wv_saturation,  only: qsat
   use omp_lib
 
+
   implicit none
   private
   save
@@ -21,7 +22,7 @@
   
   integer , parameter :: r8 = selected_real_kind(12)    !  8 byte real
   real(r8), parameter :: unset_r8 = huge(1.0_r8)
-  
+
   integer, parameter :: NUM_THREADS = 16
 
   !dir$ attributes offload:mic :: xlv,xlf,xls,cp,zvir,r,g,ep2,p00,rovcp,rpen
@@ -42,7 +43,8 @@
 !===============================================================================
 contains
 !===============================================================================
-  !DIR$ ATTRIBUTES OFFLOAD : mic :: exnf
+
+  !DIR$ ATTRIBUTES OFFLOAD : mic :: exnf  
   real(r8) function exnf(pressure)
            real(r8), intent(in)              :: pressure
            exnf = (pressure/p00)**rovcp
@@ -339,42 +341,43 @@ end subroutine uwshcu_readnl
     real(r8)                :: t0(mix,mkx)              !  Environmental temperature [ K ]
     real(r8)                :: s0(mix,mkx)              !  Environmental dry static energy [ J/kg ]
     real(r8)                :: tr0(mix,mkx,ncnst)       !  Environmental tracers [ #, kg/kg ]
-    real(r8)                :: umf(mix,0:mkx)           !  Updraft mass flux at the interfaces [ kg/m2/s ]
-    real(r8)                :: qvten(mix,mkx)           !  Tendency of water vapor specific humidity [ kg/kg/s ]
-    real(r8)                :: qlten(mix,mkx)           !  Tendency of liquid water specific humidity [ kg/kg/s ]
-    real(r8)                :: qiten(mix,mkx)           !  tendency of ice specific humidity [ kg/kg/s ]
-    real(r8)                :: sten(mix,mkx)            !  Tendency of static energy [ J/kg/s ]
-    real(r8)                :: uten(mix,mkx)            !  Tendency of zonal wind [ m/s2 ]
-    real(r8)                :: vten(mix,mkx)            !  Tendency of meridional wind [ m/s2 ]
-    real(r8)                :: trten(mix,mkx,ncnst)     !  Tendency of tracers [ #/s, kg/kg/s ]
-    real(r8)                :: qrten(mix,mkx)           !  Tendency of rain water specific humidity [ kg/kg/s ]
-    real(r8)                :: qsten(mix,mkx)           !  Tendency of snow speficif humidity [ kg/kg/s ]
-    real(r8)                :: evapc(mix,mkx)           !  Tendency of evaporation of precipitation [ kg/kg/s ]
-    real(r8)                :: slflx(mix,0:mkx)         !  Updraft liquid static energy flux [ J/kg * kg/m2/s ]
-    real(r8)                :: qtflx(mix,0:mkx)         !  Updraft total water flux [ kg/kg * kg/m2/s ]
-    real(r8)                :: flxprc1(mix,0:mkx)       ! uw grid-box mean rain+snow flux (kg m^-2 s^-1)
+    real(r8)                :: umf(0:mkx+1,mix)           !  Updraft mass flux at the interfaces [ kg/m2/s ]
+    real(r8)                :: qvten(mkx+2,mix)           !  Tendency of water vapor specific humidity [ kg/kg/s ]
+    real(r8)                :: qlten(mkx+2,mix)           !  Tendency of liquid water specific humidity [ kg/kg/s ]
+    real(r8)                :: qiten(mkx+2,mix)           !  tendency of ice specific humidity [ kg/kg/s ]
+    real(r8)                :: sten(mkx+2,mix)            !  Tendency of static energy [ J/kg/s ]
+    real(r8)                :: uten(mkx+2,mix)            !  Tendency of zonal wind [ m/s2 ]
+    real(r8)                :: vten(mkx+2,mix)            !  Tendency of meridional wind [ m/s2 ]
+    real(r8)                :: trten(mkx+2,mix,ncnst)     !  Tendency of tracers [ #/s, kg/kg/s ]
+    real(r8)                :: qrten(mkx+2,mix)           !  Tendency of rain water specific humidity [ kg/kg/s ]
+    real(r8)                :: qsten(mkx+2,mix)           !  Tendency of snow speficif humidity [ kg/kg/s ]
+    real(r8)                :: evapc(mkx+2,mix)           !  Tendency of evaporation of precipitation [ kg/kg/s ]
+    real(r8)                :: slflx(0:mkx+1,mix)         !  Updraft liquid static energy flux [ J/kg * kg/m2/s ]
+    real(r8)                :: qtflx(0:mkx+1,mix)         !  Updraft total water flux [ kg/kg * kg/m2/s ]
+    real(r8)                :: flxprc1(0:mkx+1,mix)       ! uw grid-box mean rain+snow flux (kg m^-2 s^-1)
                                                         ! for physics buffer calls in convect_shallow.F90
-    real(r8)                :: flxsnow1(mix,0:mkx)      ! uw grid-box mean snow flux (kg m^-2 s^-1)
+    real(r8)                :: flxsnow1(0:mkx+1,mix)      ! uw grid-box mean snow flux (kg m^-2 s^-1)
                                                         ! for physics buffer calls in convect_shallow.F90
-    real(r8)                :: cufrc(mix,mkx)           !  Shallow cumulus cloud fraction at the layer mid-point [ fraction ]
-    real(r8)                :: qcu(mix,mkx)             !  Condensate water specific humidity within cumulus updraft
+    real(r8)                :: cufrc(mkx+2,mix)           !  Shallow cumulus cloud fraction at the layer mid-point [ fraction ]
+    real(r8)                :: qcu(mkx+2,mix)             !  Condensate water specific humidity within cumulus updraft
                                                         ! at the layer mid-point [ kg/kg ]
-    real(r8)                :: qlu(mix,mkx)             !  Liquid water specific humidity within cumulus updraft
+    real(r8)                :: qlu(mkx+2,mix)             !  Liquid water specific humidity within cumulus updraft
                                                         ! at the layer mid-point [ kg/kg ]
-    real(r8)                :: qiu(mix,mkx)             !  Ice specific humidity within cumulus updraft
+    real(r8)                :: qiu(mkx+2,mix)             !  Ice specific humidity within cumulus updraft
                                                         ! at the layer mid-point [ kg/kg ]
-    real(r8)                :: qc(mix,mkx)              !  Tendency of cumulus condensate detrained into the environment [ kg/kg/s ]
+    real(r8)                :: qc(mkx+2,mix)              !  Tendency of cumulus condensate detrained into the environment [ kg/kg/s ]
     real(r8)                :: cnt(mix)                 !  Cumulus top  interface index, cnt = kpen [ no ]
     real(r8)                :: cnb(mix)                 !  Cumulus base interface index, cnb = krel - 1 [ no ] 
     integer                 :: k                        !  Vertical index for local fields [ no ] 
     integer                 :: k_inv                    !  Vertical index for incoming fields [ no ]
     integer                 :: m                        !  Tracer index [ no ]
 
-    integer :: iii    
+    integer :: iii
+    character(len=100) :: fileName
     real(r8), save :: totalTimeForShallowConvectionLoop
     real(r8), save :: totalTimeForEarlyExits(0:NUM_THREADS-1)
     real(r8), save :: totalTimeForLateExits(0:NUM_THREADS-1)
-    
+
     real(r8) :: timeForShallowConvectionLoop
     real(r8) :: timeForEarlyExits(0:NUM_THREADS-1)
     real(r8) :: timeForLateExits(0:NUM_THREADS-1)
@@ -422,48 +425,50 @@ end subroutine uwshcu_readnl
                          cnt  , cnb    , lchnk     , dpdry0, timeForShallowConvectionLoop, timeForEarlyExits, timeForLateExits)
 
     ! Reverse cloud top/base interface indices
+
    !!dir$ end offload
    totalTimeForShallowConvectionLoop = totalTimeForShallowConvectionLoop + timeForShallowConvectionLoop
    do iii=0, NUM_THREADS-1
       totalTimeForEarlyExits(iii) = totalTimeForEarlyExits(iii) + timeForEarlyExits(iii)
-      totalTimeForLateExits(iii) = totalTimeForLateExits(iii) + timeForLateExits(iii) 
+      totalTimeForLateExits(iii) = totalTimeForLateExits(iii) + timeForLateExits(iii)
    enddo
 
    if(iam.eq.0) then
         open(89, file="getShallowConvectionTime", status="unknown")
         write(89, *), "Total Time for shallow convection loop is ", totalTimeForShallowConvectionLoop
-    endif
+   endif
+
 
        cnt_inv(:iend) = mkx + 1 - cnt(:iend)
        cnb_inv(:iend) = mkx + 1 - cnb(:iend)
 
     do k = 0, mkx
        k_inv                  = mkx + 1 - k
-       umf_inv(:iend,k_inv)   = umf(:iend,k)       
-       slflx_inv(:iend,k_inv) = slflx(:iend,k)     
-       qtflx_inv(:iend,k_inv) = qtflx(:iend,k)
-       flxprc1_inv(:iend,k_inv) = flxprc1(:iend,k)     ! reversed for output to cam
-       flxsnow1_inv(:iend,k_inv) = flxsnow1(:iend,k)   ! ""
+       umf_inv(:iend,k_inv)   = umf(k,:iend)       
+       slflx_inv(:iend,k_inv) = slflx(k,:iend)     
+       qtflx_inv(:iend,k_inv) = qtflx(k,:iend)
+       flxprc1_inv(:iend,k_inv) = flxprc1(k,:iend)     ! reversed for output to cam
+       flxsnow1_inv(:iend,k_inv) = flxsnow1(k,:iend)   ! ""
     end do
 
     do k = 1, mkx
        k_inv                         = mkx + 1 - k
-       qvten_inv(:iend,k_inv)        = qvten(:iend,k)   
-       qlten_inv(:iend,k_inv)        = qlten(:iend,k)   
-       qiten_inv(:iend,k_inv)        = qiten(:iend,k)   
-       sten_inv(:iend,k_inv)         = sten(:iend,k)    
-       uten_inv(:iend,k_inv)         = uten(:iend,k)    
-       vten_inv(:iend,k_inv)         = vten(:iend,k)    
-       qrten_inv(:iend,k_inv)        = qrten(:iend,k)   
-       qsten_inv(:iend,k_inv)        = qsten(:iend,k)   
-       evapc_inv(:iend,k_inv)        = evapc(:iend,k)
-       cufrc_inv(:iend,k_inv)        = cufrc(:iend,k)   
-       qcu_inv(:iend,k_inv)          = qcu(:iend,k)     
-       qlu_inv(:iend,k_inv)          = qlu(:iend,k)     
-       qiu_inv(:iend,k_inv)          = qiu(:iend,k)     
-       qc_inv(:iend,k_inv)           = qc(:iend,k)      
+       qvten_inv(:iend,k_inv)        = qvten(k,:iend)   
+       qlten_inv(:iend,k_inv)        = qlten(k,:iend)   
+       qiten_inv(:iend,k_inv)        = qiten(k,:iend)   
+       sten_inv(:iend,k_inv)         = sten(k,:iend)    
+       uten_inv(:iend,k_inv)         = uten(k,:iend)    
+       vten_inv(:iend,k_inv)         = vten(k,:iend)    
+       qrten_inv(:iend,k_inv)        = qrten(k,:iend)   
+       qsten_inv(:iend,k_inv)        = qsten(k,:iend)   
+       evapc_inv(:iend,k_inv)        = evapc(k,:iend)
+       cufrc_inv(:iend,k_inv)        = cufrc(k,:iend)   
+       qcu_inv(:iend,k_inv)          = qcu(k,:iend)     
+       qlu_inv(:iend,k_inv)          = qlu(k,:iend)     
+       qiu_inv(:iend,k_inv)          = qiu(k,:iend)     
+       qc_inv(:iend,k_inv)           = qc(k,:iend)      
        do m = 1, ncnst
-          trten_inv(:iend,k_inv,m)   = trten(:iend,k,m) 
+          trten_inv(:iend,k_inv,m)   = trten(k,:iend,m) 
        enddo
 
     enddo
@@ -545,34 +550,35 @@ end subroutine uwshcu_readnl
     real(r8)                   tw0_in(mix,mkx)                !  Wet bulb temperature [ K ]
     real(r8)                   qw0_in(mix,mkx)                !  Wet-bulb specific humidity [ kg/kg ]
 
-    real(r8), intent(out)   :: umf_out(mix,0:mkx)             !  Updraft mass flux at the interfaces [ kg/m2/s ]
-    real(r8), intent(out)   :: qvten_out(mix,mkx)             !  Tendency of water vapor specific humidity [ kg/kg/s ]
-    real(r8), intent(out)   :: qlten_out(mix,mkx)             !  Tendency of liquid water specific humidity [ kg/kg/s ]
-    real(r8), intent(out)   :: qiten_out(mix,mkx)             !  Tendency of ice specific humidity [ kg/kg/s ]
-    real(r8), intent(out)   :: sten_out(mix,mkx)              !  Tendency of dry static energy [ J/kg/s ]
-    real(r8), intent(out)   :: uten_out(mix,mkx)              !  Tendency of zonal wind [ m/s2 ]
-    real(r8), intent(out)   :: vten_out(mix,mkx)              !  Tendency of meridional wind [ m/s2 ]
-    real(r8), intent(out)   :: trten_out(mix,mkx,ncnst)       !  Tendency of tracers [ #/s, kg/kg/s ]
-    real(r8), intent(out)   :: qrten_out(mix,mkx)             !  Tendency of rain water specific humidity [ kg/kg/s ]
-    real(r8), intent(out)   :: qsten_out(mix,mkx)             !  Tendency of snow specific humidity [ kg/kg/s ]
+    real(r8), intent(out)   :: umf_out(0:mkx+1,mix)             !  Updraft mass flux at the interfaces [ kg/m2/s ]
+    real(r8), intent(out)   :: qvten_out(mkx+2,mix)             !  Tendency of water vapor specific humidity [ kg/kg/s ]
+    real(r8), intent(out)   :: qlten_out(mkx+2,mix)             !  Tendency of liquid water specific humidity [ kg/kg/s ]
+    real(r8), intent(out)   :: qiten_out(mkx+2,mix)             !  Tendency of ice specific humidity [ kg/kg/s ]
+    real(r8), intent(out)   :: sten_out(mkx+2,mix)              !  Tendency of dry static energy [ J/kg/s ]
+    real(r8), intent(out)   :: uten_out(mkx+2,mix)              !  Tendency of zonal wind [ m/s2 ]
+    real(r8), intent(out)   :: vten_out(mkx+2,mix)              !  Tendency of meridional wind [ m/s2 ]
+    real(r8), intent(out)   :: trten_out(mkx+2,mix,ncnst)       !  Tendency of tracers [ #/s, kg/kg/s ]
+    real(r8), intent(out)   :: qrten_out(mkx+2,mix)             !  Tendency of rain water specific humidity [ kg/kg/s ]
+    real(r8), intent(out)   :: qsten_out(mkx+2,mix)             !  Tendency of snow specific humidity [ kg/kg/s ]
     real(r8), intent(out)   :: precip_out(mix)                !  Precipitation ( rain + snow ) rate at surface [ m/s ]
     real(r8), intent(out)   :: snow_out(mix)                  !  Snow rate at surface [ m/s ]
-    real(r8), intent(out)   :: evapc_out(mix,mkx)             !  Tendency of evaporation of precipitation [ kg/kg/s ]
-    real(r8), intent(out)   :: slflx_out(mix,0:mkx)           !  Updraft/pen.entrainment liquid static energy flux
+    real(r8), intent(out)   :: evapc_out(mkx+2,mix)             !  Tendency of evaporation of precipitation [ kg/kg/s ]
+    real(r8), intent(out)   :: slflx_out(0:mkx+1,mix)           !  Updraft/pen.entrainment liquid static energy flux
                                                               ! [ J/kg * kg/m2/s ]
-    real(r8), intent(out)   :: qtflx_out(mix,0:mkx)           !  updraft/pen.entrainment total water flux [ kg/kg * kg/m2/s ]
-    real(r8), intent(out)   :: flxprc1_out(mix,0:mkx)         ! precip (rain+snow) flux
-    real(r8), intent(out)   :: flxsnow1_out(mix,0:mkx)        ! snow flux
-    real(r8), intent(out)   :: cufrc_out(mix,mkx)             !  Shallow cumulus cloud fraction at the layer mid-point [ fraction ]
-    real(r8), intent(out)   :: qcu_out(mix,mkx)               !  Condensate water specific humidity within cumulus updraft [ kg/kg ]
-    real(r8), intent(out)   :: qlu_out(mix,mkx)               !  Liquid water specific humidity within cumulus updraft [ kg/kg ]
-    real(r8), intent(out)   :: qiu_out(mix,mkx)               !  Ice specific humidity within cumulus updraft [ kg/kg ]
+    real(r8), intent(out)   :: qtflx_out(0:mkx+1,mix)           !  updraft/pen.entrainment total water flux [ kg/kg * kg/m2/s ]
+    real(r8), intent(out)   :: flxprc1_out(0:mkx+1,mix)         ! precip (rain+snow) flux
+    real(r8), intent(out)   :: flxsnow1_out(0:mkx+1,mix)        ! snow flux
+    real(r8), intent(out)   :: cufrc_out(mkx+2,mix)             !  Shallow cumulus cloud fraction at the layer mid-point [ fraction ]
+    real(r8), intent(out)   :: qcu_out(mkx+2,mix)               !  Condensate water specific humidity within cumulus updraft [ kg/kg ]
+    real(r8), intent(out)   :: qlu_out(mkx+2,mix)               !  Liquid water specific humidity within cumulus updraft [ kg/kg ]
+    real(r8), intent(out)   :: qiu_out(mkx+2,mix)               !  Ice specific humidity within cumulus updraft [ kg/kg ]
     real(r8), intent(out)   :: cbmf_out(mix)                  !  Cloud base mass flux [ kg/m2/s ]
-    real(r8), intent(out)   :: qc_out(mix,mkx)                !  Tendency of detrained cumulus condensate
+    real(r8), intent(out)   :: qc_out(mkx+2,mix)                !  Tendency of detrained cumulus condensate
                                                               ! into the environment [ kg/kg/s ]
     real(r8), intent(out)   :: rliq_out(mix)                  !  Vertical integral of qc_out [ m/s ]
     real(r8), intent(out)   :: cnt_out(mix)                   !  Cumulus top  interface index, cnt = kpen [ no ]
     real(r8), intent(out)   :: cnb_out(mix)                   !  Cumulus base interface index, cnb = krel - 1 [ no ] 
+
     real(r8), intent(out) :: timeForShallowConvectionLoop
     real(r8), intent(out) :: timeForEarlyExits(0:NUM_THREADS-1)
     real(r8), intent(out) :: timeForLateExits(0:NUM_THREADS-1)
@@ -582,16 +588,16 @@ end subroutine uwshcu_readnl
     !
     ! Internal Output Variables
     !
-
-    real(r8)                   qtten_out(mix,mkx)             !  Tendency of qt [ kg/kg/s ]
-    real(r8)                   slten_out(mix,mkx)             !  Tendency of sl [ J/kg/s ]
-    real(r8)                   ufrc_out(mix,0:mkx)            !  Updraft fractional area at the interfaces [ fraction ]
-    real(r8)                   uflx_out(mix,0:mkx)            !  Updraft/pen.entrainment zonal momentum flux [ m/s/m2/s ]
-    real(r8)                   vflx_out(mix,0:mkx)            !  Updraft/pen.entrainment meridional momentum flux [ m/s/m2/s ]
-    real(r8)                   fer_out(mix,mkx)               !  Fractional lateral entrainment rate [ 1/Pa ]
-    real(r8)                   fdr_out(mix,mkx)               !  Fractional lateral detrainment rate [ 1/Pa ]
+    !dir$ attributes align: 64:: qtten_out
+    real(r8)                   qtten_out(mkx+2,mix)             !  Tendency of qt [ kg/kg/s ]
+    real(r8)                   slten_out(mkx+2,mix)             !  Tendency of sl [ J/kg/s ]
+    real(r8)                   ufrc_out(0:mkx+1,mix)            !  Updraft fractional area at the interfaces [ fraction ]
+    real(r8)                   uflx_out(0:mkx+1,mix)            !  Updraft/pen.entrainment zonal momentum flux [ m/s/m2/s ]
+    real(r8)                   vflx_out(0:mkx+1,mix)            !  Updraft/pen.entrainment meridional momentum flux [ m/s/m2/s ]
+    real(r8)                   fer_out(mkx+2,mix)               !  Fractional lateral entrainment rate [ 1/Pa ]
+    real(r8)                   fdr_out(mkx+2,mix)               !  Fractional lateral detrainment rate [ 1/Pa ]
     real(r8)                   cinh_out(mix)                  !  Convective INhibition upto LFC (CIN) [ J/kg ]
-    real(r8)                   trflx_out(mix,0:mkx,ncnst)     !  Updraft/pen.entrainment tracer flux [ #/m2/s, kg/kg/m2/s ] 
+    real(r8)                   trflx_out(0:mkx+1,mix,ncnst)     !  Updraft/pen.entrainment tracer flux [ #/m2/s, kg/kg/m2/s ] 
    
     ! -------------------------------------------- !
     ! One-dimensional variables at each grid point !
@@ -775,7 +781,7 @@ end subroutine uwshcu_readnl
     real(r8)    subsat                                        !  Sub-saturation ratio (1-qv/qs) [ no unit ]
     real(r8)    evprain                                       !  Evaporation rate of rain [ kg/kg/s ]
     real(r8)    evpsnow                                       !  Evaporation rate of snow [ kg/kg/s ]
-    real(r8)    evplimit                                      !  Limiter of 'evprain + evpsnow' [ kg/kg/s ]
+    real(r8)    evplimit                                      !  miter of 'evprain + evpsnow' [ kg/kg/s ]
     real(r8)    evplimit_rain                                 !  Limiter of 'evprain' [ kg/kg/s ]
     real(r8)    evplimit_snow                                 !  Limiter of 'evpsnow' [ kg/kg/s ]
     real(r8)    evpint_rain                                   !  Vertically-integrated evaporative flux of rain [ kg/m2/s ]
@@ -851,21 +857,23 @@ end subroutine uwshcu_readnl
     real(r8)  rcwp_out(mix)                                   !  Layer mean Cumulus LWP+IWP [ kg/m2 ] 
     real(r8)  rlwp_out(mix)                                   !  Layer mean Cumulus LWP [ kg/m2 ] 
     real(r8)  riwp_out(mix)                                   !  Layer mean Cumulus IWP [ kg/m2 ] 
-    real(r8)  wu_out(mix,0:mkx)                               !  Updraft vertical velocity
+    real(r8)  wu_out(0:mkx+1,mix)                               !  Updraft vertical velocity
                                                               ! ( defined from the release level to 'kpen-1' interface )
-    real(r8)  qtu_out(mix,0:mkx)                              !  Updraft qt [ kg/kg ]
-    real(r8)  thlu_out(mix,0:mkx)                             !  Updraft thl [ K ]
-    real(r8)  thvu_out(mix,0:mkx)                             !  Updraft thv [ K ]
-    real(r8)  uu_out(mix,0:mkx)                               !  Updraft zonal wind [ m/s ] 
-    real(r8)  vu_out(mix,0:mkx)                               !  Updraft meridional wind [ m/s ]
-    real(r8)  qtu_emf_out(mix,0:mkx)                          !  Penetratively entrained qt [ kg/kg ]   
-    real(r8)  thlu_emf_out(mix,0:mkx)                         !  Penetratively entrained thl [ K ]
-    real(r8)  uu_emf_out(mix,0:mkx)                           !  Penetratively entrained u [ m/s ]
-    real(r8)  vu_emf_out(mix,0:mkx)                           !  Penetratively entrained v [ m/s ]
-    real(r8)  uemf_out(mix,0:mkx)                             !  Net upward mass flux
+
+    real(r8)  qtu_out(0:mkx+1,mix)                              !  Updraft qt [ kg/kg ]
+    real(r8)  thlu_out(0:mkx+1,mix)                             !  Updraft thl [ K ]
+    real(r8)  thvu_out(0:mkx+1,mix)                             !  Updraft thv [ K ]
+    real(r8)  uu_out(0:mkx+1,mix)                               !  Updraft zonal wind [ m/s ] 
+    real(r8)  vu_out(0:mkx+1,mix)                               !  Updraft meridional wind [ m/s ]
+    real(r8)  qtu_emf_out(0:mkx+1,mix)                          !  Penetratively entrained qt [ kg/kg ]   
+    real(r8)  thlu_emf_out(0:mkx+1,mix)                         !  Penetratively entrained thl [ K ]
+    real(r8)  uu_emf_out(0:mkx+1,mix)                           !  Penetratively entrained u [ m/s ]
+    real(r8)  vu_emf_out(0:mkx+1,mix)                           !  Penetratively entrained v [ m/s ]
+    real(r8)  uemf_out(0:mkx+1,mix)                             !  Net upward mass flux
+
                                                               ! including penetrative entrainment (umf+emf) [ kg/m2/s ]
-    real(r8)  tru_out(mix,0:mkx,ncnst)                        !  Updraft tracers [ #, kg/kg ]   
-    real(r8)  tru_emf_out(mix,0:mkx,ncnst)                    !  Penetratively entrained tracers [ #, kg/kg ]
+    real(r8)  tru_out(0:mkx+1,mix,ncnst)                        !  Updraft tracers [ #, kg/kg ]   
+    real(r8)  tru_emf_out(0:mkx+1,mix,ncnst)                    !  Penetratively entrained tracers [ #, kg/kg ]
 
     real(r8)  wu_s(0:mkx)                                     !  Same as above but for implicit CIN
     real(r8)  qtu_s(0:mkx)
@@ -881,12 +889,12 @@ end subroutine uwshcu_readnl
     real(r8)  tru_s(0:mkx,ncnst)
     real(r8)  tru_emf_s(0:mkx,ncnst)   
 
-    real(r8)  dwten_out(mix,mkx)
-    real(r8)  diten_out(mix,mkx)
-    real(r8)  flxrain_out(mix,0:mkx)  
-    real(r8)  flxsnow_out(mix,0:mkx)  
-    real(r8)  ntraprd_out(mix,mkx)    
-    real(r8)  ntsnprd_out(mix,mkx)    
+    real(r8)  dwten_out(mkx+2,mix)
+    real(r8)  diten_out(mkx+2,mix)
+    real(r8)  flxrain_out(0:mkx+1,mix)  
+    real(r8)  flxsnow_out(0:mkx+1,mix)  
+    real(r8)  ntraprd_out(mkx+2,mix)    
+    real(r8)  ntsnprd_out(mkx+2,mix)    
 
     real(r8)  dwten_s(mkx)
     real(r8)  diten_s(mkx)
@@ -895,28 +903,28 @@ end subroutine uwshcu_readnl
     real(r8)  ntraprd_s(mkx)    
     real(r8)  ntsnprd_s(mkx)    
 
-    real(r8)  excessu_arr_out(mix,mkx)
+    real(r8)  excessu_arr_out(mkx+2,mix)
     real(r8)  excessu_arr(mkx) 
     real(r8)  excessu_arr_s(mkx)
-    real(r8)  excess0_arr_out(mix,mkx)
+    real(r8)  excess0_arr_out(mkx+2,mix)
     real(r8)  excess0_arr(mkx)
     real(r8)  excess0_arr_s(mkx)
-    real(r8)  xc_arr_out(mix,mkx)
+    real(r8)  xc_arr_out(mkx+2,mix)
     real(r8)  xc_arr(mkx)
     real(r8)  xc_arr_s(mkx)
-    real(r8)  aquad_arr_out(mix,mkx)
+    real(r8)  aquad_arr_out(mkx+2,mix)
     real(r8)  aquad_arr(mkx)
     real(r8)  aquad_arr_s(mkx)
-    real(r8)  bquad_arr_out(mix,mkx)
+    real(r8)  bquad_arr_out(mkx+2,mix)
     real(r8)  bquad_arr(mkx)
     real(r8)  bquad_arr_s(mkx)
-    real(r8)  cquad_arr_out(mix,mkx) 
+    real(r8)  cquad_arr_out(mkx+2,mix) 
     real(r8)  cquad_arr(mkx)
     real(r8)  cquad_arr_s(mkx)
-    real(r8)  bogbot_arr_out(mix,mkx)
+    real(r8)  bogbot_arr_out(mkx+2,mix)
     real(r8)  bogbot_arr(mkx)
     real(r8)  bogbot_arr_s(mkx)
-    real(r8)  bogtop_arr_out(mix,mkx)
+    real(r8)  bogtop_arr_out(mkx+2,mix)
     real(r8)  bogtop_arr(mkx)
     real(r8)  bogtop_arr_s(mkx)
 
@@ -1100,6 +1108,7 @@ end subroutine uwshcu_readnl
     parameter ( frc_rasn = 1.0_r8    )
     parameter ( kevp     = 2.e-6_r8  )
     logical, parameter :: noevap_krelkpen = .false.
+   
 
     !------------------------!
     !                        !
@@ -1120,47 +1129,47 @@ end subroutine uwshcu_readnl
     ! Initialize output variables defined for all grid points !
     ! ------------------------------------------------------- !
     t1_start_time = omp_get_wtime()
-
-    !$omp parallel do firstprivate(ixnumliq,ixnumice,ixcldliq,ixcldice,cinh_out,cinlclh_out) shared( mix, mkx, iend, ncnst, dt, ps0_in   , zs0_in    , p0_in        , z0_in    , dp0_in    , u0_in    , v0_in     , qv0_in       , ql0_in   , qi0_in    ,   t0_in    , s0_in     , tr0_in ,tke_in   , cldfrct_in, concldfrct_in,  pblh_in , cush_inout,  umf_out  , slflx_out , qtflx_out    , flxprc1_out  , flxsnow1_out  , qvten_out, qlten_out , qiten_out    ,  sten_out , uten_out  , vten_out     , trten_out, qrten_out, qsten_out , precip_out   , snow_out , evapc_out , cufrc_out, qcu_out   , qlu_out      , qiu_out  , cbmf_out , qc_out    , rliq_out, cnt_out  , cnb_out   , lchnk  , dpdry0_in) default(firstprivate) num_threads(NUM_THREADS) schedule(static)
+    !$omp parallel do firstprivate(ixnumliq,ixnumice,ixcldliq,ixcldice) shared(cinh_out,cinlclh_out,ql0_in,qi0_in,tw0_in,qv0_in,mix,mkx,iend,ncnst,dt,ps0_in,zs0_in,p0_in,z0_in,dp0_in,u0_in,v0_in,t0_in,s0_in,tr0_in,tke_in,cldfrct_in,concldfrct_in,pblh_in,cush_inout,umf_out,slflx_out,qtflx_out,flxprc1_out,flxsnow1_out,qvten_out,qlten_out,qiten_out,sten_out,uten_out,vten_out,trten_out,qrten_out,qsten_out,precip_out,snow_out,evapc_out,cufrc_out,qcu_out,qlu_out,qiu_out,cbmf_out,qc_out,rliq_out,cnt_out,cnb_out,lchnk,dpdry0_in,qw0_in,qtten_out,slten_out,ufrc_out,uflx_out,vflx_out,trflx_out,ufrcinvbase_out,ufrclcl_out,winvbase_out,wlcl_out,plcl_out,pinv_out,plfc_out,pbup_out,ppen_out,qtsrc_out,thlsrc_out,thvlsrc_out,emfkbup_out,cbmflimit_out,tkeavg_out,zinv_out,rcwp_out,rlwp_out,riwp_out,wu_out,qtu_out,thlu_out,thvu_out,uu_out,vu_out,qtu_emf_out,thlu_emf_out,uu_emf_out,vu_emf_out,uemf_out,tru_out,tru_emf_out,dwten_out,diten_out,flxrain_out,flxsnow_out,ntraprd_out,ntsnprd_out,excessu_arr_out,excess0_arr_out,xc_arr_out,aquad_arr_out,bquad_arr_out,cquad_arr_out,bogbot_arr_out,bogtop_arr_out,exit_UWCu,exit_conden,exit_klclmkx,exit_klfcmkx,exit_ufrc,exit_wtw,exit_drycore,exit_wu,exit_cufilter,exit_kinv1,exit_rei,limit_shcu,limit_negcon,limit_ufrc,limit_ppen,limit_emf,limit_cinlcl,limit_cin,limit_cbmf,limit_rei,ind_delcin,fer_out,fdr_out,numptr_amode,qmin,xlv,xlf,xls,cp,zvir,r,g,ep2,p00,rovcp,rpen,timeForEarlyExits,timeForLateExits) default(private) num_threads(NUM_THREADS) schedule(dynamic,2)
     do i = 1, iend
-    umf_out(i,0:mkx)         = 0.0_r8
-    slflx_out(i,0:mkx)       = 0.0_r8
-    qtflx_out(i,0:mkx)       = 0.0_r8
-    flxprc1_out(i,0:mkx)     = 0.0_r8
-    flxsnow1_out(i,0:mkx)    = 0.0_r8
-    qvten_out(i,:mkx)        = 0.0_r8
-    qlten_out(i,:mkx)        = 0.0_r8
-    qiten_out(i,:mkx)        = 0.0_r8
-    sten_out(i,:mkx)         = 0.0_r8
-    uten_out(i,:mkx)         = 0.0_r8
-    vten_out(i,:mkx)         = 0.0_r8
-    qrten_out(i,:mkx)        = 0.0_r8
-    qsten_out(i,:mkx)        = 0.0_r8
+    umf_out(0:mkx,i)         = 0.0_r8
+    slflx_out(0:mkx,i)       = 0.0_r8
+    qtflx_out(0:mkx,i)       = 0.0_r8
+    flxprc1_out(0:mkx,i)     = 0.0_r8
+    flxsnow1_out(0:mkx,i)    = 0.0_r8
+    qvten_out(:mkx,i)        = 0.0_r8
+    qlten_out(:mkx,i)        = 0.0_r8
+    qiten_out(:mkx,i)        = 0.0_r8
+    sten_out(:mkx,i)         = 0.0_r8
+    uten_out(:mkx,i)         = 0.0_r8
+    vten_out(:mkx,i)         = 0.0_r8
+    qrten_out(:mkx,i)        = 0.0_r8
+    qsten_out(:mkx,i)        = 0.0_r8
     precip_out(i)            = 0.0_r8
     snow_out(i)              = 0.0_r8
-    evapc_out(i,:mkx)        = 0.0_r8
-    cufrc_out(i,:mkx)        = 0.0_r8
-    qcu_out(i,:mkx)          = 0.0_r8
-    qlu_out(i,:mkx)          = 0.0_r8
-    qiu_out(i,:mkx)          = 0.0_r8
-    fer_out(i,:mkx)          = 0.0_r8
-    fdr_out(i,:mkx)          = 0.0_r8
+    evapc_out(:mkx,i)        = 0.0_r8
+    cufrc_out(:mkx,i)        = 0.0_r8
+    qcu_out(:mkx,i)          = 0.0_r8
+    qlu_out(:mkx,i)          = 0.0_r8
+    qiu_out(:mkx,i)          = 0.0_r8
+    fer_out(:mkx,i)          = 0.0_r8
+    fdr_out(:mkx,i)          = 0.0_r8
     cinh_out(i)              = -1.0_r8
     cinlclh_out(i)           = -1.0_r8
     cbmf_out(i)              = 0.0_r8
-    qc_out(i,:mkx)           = 0.0_r8
+    qc_out(:mkx,i)           = 0.0_r8
     rliq_out(i)              = 0.0_r8
     cnt_out(i)               = real(mkx, r8)
     cnb_out(i)               = 0.0_r8
-    qtten_out(i,:mkx)        = 0.0_r8
-    slten_out(i,:mkx)        = 0.0_r8
-    ufrc_out(i,0:mkx)        = 0.0_r8
+    !dir$ assume_aligned qtten_out:64
+    qtten_out(:mkx,i)        = 0.0_r8
+    slten_out(:mkx,i)        = 0.0_r8
+    ufrc_out(0:mkx,i)        = 0.0_r8
 
-    uflx_out(i,0:mkx)        = 0.0_r8
-    vflx_out(i,0:mkx)        = 0.0_r8
+    uflx_out(0:mkx,i)        = 0.0_r8
+    vflx_out(0:mkx,i)        = 0.0_r8
 
-    trten_out(i,:mkx,:ncnst) = 0.0_r8
-    trflx_out(i,0:mkx,:ncnst)= 0.0_r8
+    trten_out(:mkx,i,:ncnst) = 0.0_r8
+    trflx_out(0:mkx,i,:ncnst)= 0.0_r8
     
     ufrcinvbase_out(i)       = 0.0_r8
     ufrclcl_out(i)           = 0.0_r8
@@ -1182,36 +1191,36 @@ end subroutine uwshcu_readnl
     rlwp_out(i)              = 0.0_r8
     riwp_out(i)              = 0.0_r8
 
-    wu_out(i,0:mkx)          = 0.0_r8
-    qtu_out(i,0:mkx)         = 0.0_r8
-    thlu_out(i,0:mkx)        = 0.0_r8
-    thvu_out(i,0:mkx)        = 0.0_r8
-    uu_out(i,0:mkx)          = 0.0_r8
-    vu_out(i,0:mkx)          = 0.0_r8
-    qtu_emf_out(i,0:mkx)     = 0.0_r8
-    thlu_emf_out(i,0:mkx)    = 0.0_r8
-    uu_emf_out(i,0:mkx)      = 0.0_r8
-    vu_emf_out(i,0:mkx)      = 0.0_r8
-    uemf_out(i,0:mkx)        = 0.0_r8
+    wu_out(0:mkx,i)          = 0.0_r8
+    qtu_out(0:mkx,i)         = 0.0_r8
+    thlu_out(0:mkx,i)        = 0.0_r8
+    thvu_out(0:mkx,i)        = 0.0_r8
+    uu_out(0:mkx,i)          = 0.0_r8
+    vu_out(0:mkx,i)          = 0.0_r8
+    qtu_emf_out(0:mkx,i)     = 0.0_r8
+    thlu_emf_out(0:mkx,i)    = 0.0_r8
+    uu_emf_out(0:mkx,i)      = 0.0_r8
+    vu_emf_out(0:mkx,i)      = 0.0_r8
+    uemf_out(0:mkx,i)        = 0.0_r8
 
-    tru_out(i,0:mkx,:ncnst)     = 0.0_r8
-    tru_emf_out(i,0:mkx,:ncnst) = 0.0_r8
+    tru_out(0:mkx,i,:ncnst)     = 0.0_r8
+    tru_emf_out(0:mkx,i,:ncnst) = 0.0_r8
 
-    dwten_out(i,:mkx)        = 0.0_r8
-    diten_out(i,:mkx)        = 0.0_r8
-    flxrain_out(i,0:mkx)     = 0.0_r8  
-    flxsnow_out(i,0:mkx)     = 0.0_r8
-    ntraprd_out(i,mkx)       = 0.0_r8
-    ntsnprd_out(i,mkx)       = 0.0_r8
+    dwten_out(:mkx,i)        = 0.0_r8
+    diten_out(:mkx,i)        = 0.0_r8
+    flxrain_out(0:mkx,i)     = 0.0_r8  
+    flxsnow_out(0:mkx,i)     = 0.0_r8
+    ntraprd_out(mkx,i)       = 0.0_r8
+    ntsnprd_out(mkx,i)       = 0.0_r8
 
-    excessu_arr_out(i,:mkx)  = 0.0_r8
-    excess0_arr_out(i,:mkx)  = 0.0_r8
-    xc_arr_out(i,:mkx)       = 0.0_r8
-    aquad_arr_out(i,:mkx)    = 0.0_r8
-    bquad_arr_out(i,:mkx)    = 0.0_r8
-    cquad_arr_out(i,:mkx)    = 0.0_r8
-    bogbot_arr_out(i,:mkx)   = 0.0_r8
-    bogtop_arr_out(i,:mkx)   = 0.0_r8
+    excessu_arr_out(:mkx,i)  = 0.0_r8
+    excess0_arr_out(:mkx,i)  = 0.0_r8
+    xc_arr_out(:mkx,i)       = 0.0_r8
+    aquad_arr_out(:mkx,i)    = 0.0_r8
+    bquad_arr_out(:mkx,i)    = 0.0_r8
+    cquad_arr_out(:mkx,i)    = 0.0_r8
+    bogbot_arr_out(:mkx,i)   = 0.0_r8
+    bogtop_arr_out(:mkx,i)   = 0.0_r8
 
     exit_UWCu(i)             = 0.0_r8 
     exit_conden(i)           = 0.0_r8 
@@ -1252,6 +1261,7 @@ end subroutine uwshcu_readnl
             tw0_in(i,k), qw0_in(i,k))
     end do
 
+
       id_exit = .false.
 
       ! -------------------------------------------- !
@@ -1262,7 +1272,6 @@ end subroutine uwshcu_readnl
       zs0(0:mkx)       = zs0_in(i,0:mkx)
       p0(:mkx)         = p0_in(i,:mkx)
       z0(:mkx)         = z0_in(i,:mkx)
-
       dp0(:mkx)        = dp0_in(i,:mkx)
       dpdry0(:mkx)     = dpdry0_in(i,:mkx)
       u0(:mkx)         = u0_in(i,:mkx)
@@ -1936,32 +1945,32 @@ end subroutine uwshcu_readnl
                ! Restore original output values of "iter_cin = 1" and exit !
                ! --------------------------------------------------------- !
 
-               umf_out(i,0:mkx)         = umf_s(0:mkx)
-               qvten_out(i,:mkx)        = qvten_s(:mkx)
-               qlten_out(i,:mkx)        = qlten_s(:mkx)  
-               qiten_out(i,:mkx)        = qiten_s(:mkx)
-               sten_out(i,:mkx)         = sten_s(:mkx)
-               uten_out(i,:mkx)         = uten_s(:mkx)  
-               vten_out(i,:mkx)         = vten_s(:mkx)
-               qrten_out(i,:mkx)        = qrten_s(:mkx)
-               qsten_out(i,:mkx)        = qsten_s(:mkx)  
+               umf_out(0:mkx,i)         = umf_s(0:mkx)
+               qvten_out(:mkx,i)        = qvten_s(:mkx)
+               qlten_out(:mkx,i)        = qlten_s(:mkx)  
+               qiten_out(:mkx,i)        = qiten_s(:mkx)
+               sten_out(:mkx,i)         = sten_s(:mkx)
+               uten_out(:mkx,i)         = uten_s(:mkx)  
+               vten_out(:mkx,i)         = vten_s(:mkx)
+               qrten_out(:mkx,i)        = qrten_s(:mkx)
+               qsten_out(:mkx,i)        = qsten_s(:mkx)  
                precip_out(i)            = precip_s
                snow_out(i)              = snow_s
-               evapc_out(i,:mkx)        = evapc_s(:mkx)
+               evapc_out(:mkx,i)        = evapc_s(:mkx)
                cush_inout(i)            = cush_s
-               cufrc_out(i,:mkx)        = cufrc_s(:mkx)  
-               slflx_out(i,0:mkx)       = slflx_s(0:mkx)  
-               qtflx_out(i,0:mkx)       = qtflx_s(0:mkx)
-               qcu_out(i,:mkx)          = qcu_s(:mkx)    
-               qlu_out(i,:mkx)          = qlu_s(:mkx)  
-               qiu_out(i,:mkx)          = qiu_s(:mkx)  
+               cufrc_out(:mkx,i)        = cufrc_s(:mkx)  
+               slflx_out(0:mkx,i)       = slflx_s(0:mkx)  
+               qtflx_out(0:mkx,i)       = qtflx_s(0:mkx)
+               qcu_out(:mkx,i)          = qcu_s(:mkx)    
+               qlu_out(:mkx,i)          = qlu_s(:mkx)  
+               qiu_out(:mkx,i)          = qiu_s(:mkx)  
                cbmf_out(i)              = cbmf_s
-               qc_out(i,:mkx)           = qc_s(:mkx)  
+               qc_out(:mkx,i)           = qc_s(:mkx)  
                rliq_out(i)              = rliq_s
                cnt_out(i)               = cnt_s
                cnb_out(i)               = cnb_s
                do m = 1, ncnst
-                  trten_out(i,:mkx,m)   = trten_s(:mkx,m)
+                  trten_out(:mkx,i,m)   = trten_s(:mkx,m)
                enddo  
              
                ! ------------------------------------------------------------------------------ ! 
@@ -1969,15 +1978,15 @@ end subroutine uwshcu_readnl
                ! The order of vertical index is reversed for this internal diagnostic output.   !
                ! ------------------------------------------------------------------------------ !   
 
-               fer_out(i,mkx:1:-1)      = fer_s(:mkx)  
-               fdr_out(i,mkx:1:-1)      = fdr_s(:mkx)  
+               fer_out(mkx:1:-1,i)      = fer_s(:mkx)  
+               fdr_out(mkx:1:-1,i)      = fdr_s(:mkx)  
                cinh_out(i)              = cin_s
                cinlclh_out(i)           = cinlcl_s
-               qtten_out(i,mkx:1:-1)    = qtten_s(:mkx)
-               slten_out(i,mkx:1:-1)    = slten_s(:mkx)
-               ufrc_out(i,mkx:0:-1)     = ufrc_s(0:mkx)
-               uflx_out(i,mkx:0:-1)     = uflx_s(0:mkx)  
-               vflx_out(i,mkx:0:-1)     = vflx_s(0:mkx)  
+               qtten_out(mkx:1:-1,i)    = qtten_s(:mkx)
+               slten_out(mkx:1:-1,i)    = slten_s(:mkx)
+               ufrc_out(mkx:0:-1,i)     = ufrc_s(0:mkx)
+               uflx_out(mkx:0:-1,i)     = uflx_s(0:mkx)  
+               vflx_out(mkx:0:-1,i)     = vflx_s(0:mkx)  
 
                ufrcinvbase_out(i)       = ufrcinvbase_s
                ufrclcl_out(i)           = ufrclcl_s 
@@ -1999,38 +2008,38 @@ end subroutine uwshcu_readnl
                rlwp_out(i)              = rlwp_s
                riwp_out(i)              = riwp_s
 
-               wu_out(i,mkx:0:-1)       = wu_s(0:mkx)
-               qtu_out(i,mkx:0:-1)      = qtu_s(0:mkx)
-               thlu_out(i,mkx:0:-1)     = thlu_s(0:mkx)
-               thvu_out(i,mkx:0:-1)     = thvu_s(0:mkx)
-               uu_out(i,mkx:0:-1)       = uu_s(0:mkx)
-               vu_out(i,mkx:0:-1)       = vu_s(0:mkx)
-               qtu_emf_out(i,mkx:0:-1)  = qtu_emf_s(0:mkx)
-               thlu_emf_out(i,mkx:0:-1) = thlu_emf_s(0:mkx)
-               uu_emf_out(i,mkx:0:-1)   = uu_emf_s(0:mkx)
-               vu_emf_out(i,mkx:0:-1)   = vu_emf_s(0:mkx)
-               uemf_out(i,mkx:0:-1)     = uemf_s(0:mkx)
+               wu_out(mkx:0:-1,i)       = wu_s(0:mkx)
+               qtu_out(mkx:0:-1,i)      = qtu_s(0:mkx)
+               thlu_out(mkx:0:-1,i)     = thlu_s(0:mkx)
+               thvu_out(mkx:0:-1,i)     = thvu_s(0:mkx)
+               uu_out(mkx:0:-1,i)       = uu_s(0:mkx)
+               vu_out(mkx:0:-1,i)       = vu_s(0:mkx)
+               qtu_emf_out(mkx:0:-1,i)  = qtu_emf_s(0:mkx)
+               thlu_emf_out(mkx:0:-1,i) = thlu_emf_s(0:mkx)
+               uu_emf_out(mkx:0:-1,i)   = uu_emf_s(0:mkx)
+               vu_emf_out(mkx:0:-1,i)   = vu_emf_s(0:mkx)
+               uemf_out(mkx:0:-1,i)     = uemf_s(0:mkx)
 
-               dwten_out(i,mkx:1:-1)    = dwten_s(:mkx)
-               diten_out(i,mkx:1:-1)    = diten_s(:mkx)
-               flxrain_out(i,mkx:0:-1)  = flxrain_s(0:mkx)
-               flxsnow_out(i,mkx:0:-1)  = flxsnow_s(0:mkx)
-               ntraprd_out(i,mkx:1:-1)  = ntraprd_s(:mkx)
-               ntsnprd_out(i,mkx:1:-1)  = ntsnprd_s(:mkx)
+               dwten_out(mkx:1:-1,i)    = dwten_s(:mkx)
+               diten_out(mkx:1:-1,i)    = diten_s(:mkx)
+               flxrain_out(mkx:0:-1,i)  = flxrain_s(0:mkx)
+               flxsnow_out(mkx:0:-1,i)  = flxsnow_s(0:mkx)
+               ntraprd_out(mkx:1:-1,i)  = ntraprd_s(:mkx)
+               ntsnprd_out(mkx:1:-1,i)  = ntsnprd_s(:mkx)
 
-               excessu_arr_out(i,mkx:1:-1)  = excessu_arr_s(:mkx)
-               excess0_arr_out(i,mkx:1:-1)  = excess0_arr_s(:mkx)
-               xc_arr_out(i,mkx:1:-1)       = xc_arr_s(:mkx)
-               aquad_arr_out(i,mkx:1:-1)    = aquad_arr_s(:mkx)
-               bquad_arr_out(i,mkx:1:-1)    = bquad_arr_s(:mkx)
-               cquad_arr_out(i,mkx:1:-1)    = cquad_arr_s(:mkx)
-               bogbot_arr_out(i,mkx:1:-1)   = bogbot_arr_s(:mkx)
-               bogtop_arr_out(i,mkx:1:-1)   = bogtop_arr_s(:mkx)
+               excessu_arr_out(mkx:1:-1,i)  = excessu_arr_s(:mkx)
+               excess0_arr_out(mkx:1:-1,i)  = excess0_arr_s(:mkx)
+               xc_arr_out(mkx:1:-1,i)       = xc_arr_s(:mkx)
+               aquad_arr_out(mkx:1:-1,i)    = aquad_arr_s(:mkx)
+               bquad_arr_out(mkx:1:-1,i)    = bquad_arr_s(:mkx)
+               cquad_arr_out(mkx:1:-1,i)    = cquad_arr_s(:mkx)
+               bogbot_arr_out(mkx:1:-1,i)   = bogbot_arr_s(:mkx)
+               bogtop_arr_out(mkx:1:-1,i)   = bogtop_arr_s(:mkx)
 
                do m = 1, ncnst
-                  trflx_out(i,mkx:0:-1,m)   = trflx_s(0:mkx,m)  
-                  tru_out(i,mkx:0:-1,m)     = tru_s(0:mkx,m)
-                  tru_emf_out(i,mkx:0:-1,m) = tru_emf_s(0:mkx,m)
+                  trflx_out(mkx:0:-1,i,m)   = trflx_s(0:mkx,m)  
+                  tru_out(mkx:0:-1,i,m)     = tru_s(0:mkx,m)
+                  tru_emf_out(mkx:0:-1,i,m) = tru_emf_s(0:mkx,m)
                enddo
 
                id_exit = .false.
@@ -4322,43 +4331,42 @@ end subroutine uwshcu_readnl
           end do
 
        endif               ! End of 'if(iter .ne. iter_cin)' if sentence. 
-
      end do                ! End of implicit CIN loop (cin_iter)      
 
      ! ----------------------- !
      ! Update Output Variables !
      ! ----------------------- !
- 
-     umf_out(i,0:mkx)             = umf(0:mkx)
-     slflx_out(i,0:mkx)           = slflx(0:mkx)
-     qtflx_out(i,0:mkx)           = qtflx(0:mkx)
+
+     umf_out(0:mkx,i)             = umf(0:mkx)
+     slflx_out(0:mkx,i)           = slflx(0:mkx)
+     qtflx_out(0:mkx,i)           = qtflx(0:mkx)
 !the indices are not reversed, these variables go into compute_mcshallow_inv, this is why they are called "flxprc1" and "flxsnow1". 
-     flxprc1_out(i,0:mkx)         = flxrain(0:mkx) + flxsnow(0:mkx)
-     flxsnow1_out(i,0:mkx)        = flxsnow(0:mkx)
-     qvten_out(i,:mkx)            = qvten(:mkx)
-     qlten_out(i,:mkx)            = qlten(:mkx)
-     qiten_out(i,:mkx)            = qiten(:mkx)
-     sten_out(i,:mkx)             = sten(:mkx)
-     uten_out(i,:mkx)             = uten(:mkx)
-     vten_out(i,:mkx)             = vten(:mkx)
-     qrten_out(i,:mkx)            = qrten(:mkx)
-     qsten_out(i,:mkx)            = qsten(:mkx)
+     flxprc1_out(0:mkx,i)         = flxrain(0:mkx) + flxsnow(0:mkx)
+     flxsnow1_out(0:mkx,i)        = flxsnow(0:mkx)
+     qvten_out(:mkx,i)            = qvten(:mkx)
+     qlten_out(:mkx,i)            = qlten(:mkx)
+     qiten_out(:mkx,i)            = qiten(:mkx)
+     sten_out(:mkx,i)             = sten(:mkx)
+     uten_out(:mkx,i)             = uten(:mkx)
+     vten_out(:mkx,i)             = vten(:mkx)
+     qrten_out(:mkx,i)            = qrten(:mkx)
+     qsten_out(:mkx,i)            = qsten(:mkx)
      precip_out(i)                = precip
      snow_out(i)                  = snow
-     evapc_out(i,:mkx)            = evapc(:mkx)
-     cufrc_out(i,:mkx)            = cufrc(:mkx)
-     qcu_out(i,:mkx)              = qcu(:mkx)
-     qlu_out(i,:mkx)              = qlu(:mkx)
-     qiu_out(i,:mkx)              = qiu(:mkx)
+     evapc_out(:mkx,i)            = evapc(:mkx)
+     cufrc_out(:mkx,i)            = cufrc(:mkx)
+     qcu_out(:mkx,i)              = qcu(:mkx)
+     qlu_out(:mkx,i)              = qlu(:mkx)
+     qiu_out(:mkx,i)              = qiu(:mkx)
      cush_inout(i)                = cush
      cbmf_out(i)                  = cbmf
      rliq_out(i)                  = rliq
-     qc_out(i,:mkx)               = qc(:mkx)
+     qc_out(:mkx,i)               = qc(:mkx)
      cnt_out(i)                   = cnt
      cnb_out(i)                   = cnb
 
      do m = 1, ncnst
-        trten_out(i,:mkx,m)       = trten(:mkx,m)
+        trten_out(:mkx,i,m)       = trten(:mkx,m)
      enddo
   
      ! ------------------------------------------------- !
@@ -4366,15 +4374,15 @@ end subroutine uwshcu_readnl
      ! analysis of cumulus scheme                        !
      ! ------------------------------------------------- !
 
-     fer_out(i,mkx:1:-1)          = fer(:mkx)  
-     fdr_out(i,mkx:1:-1)          = fdr(:mkx)  
+     fer_out(mkx:1:-1,i)          = fer(:mkx)  
+     fdr_out(mkx:1:-1,i)          = fdr(:mkx)  
      cinh_out(i)                  = cin
      cinlclh_out(i)               = cinlcl
-     qtten_out(i,mkx:1:-1)        = qtten(:mkx)
-     slten_out(i,mkx:1:-1)        = slten(:mkx)
-     ufrc_out(i,mkx:0:-1)         = ufrc(0:mkx)
-     uflx_out(i,mkx:0:-1)         = uflx(0:mkx)  
-     vflx_out(i,mkx:0:-1)         = vflx(0:mkx)  
+     qtten_out(mkx:1:-1,i)        = qtten(:mkx)
+     slten_out(mkx:1:-1,i)        = slten(:mkx)
+     ufrc_out(mkx:0:-1,i)         = ufrc(0:mkx)
+     uflx_out(mkx:0:-1,i)         = uflx(0:mkx)  
+     vflx_out(mkx:0:-1,i)         = vflx(0:mkx)  
      
      ufrcinvbase_out(i)           = ufrcinvbase
      ufrclcl_out(i)               = ufrclcl 
@@ -4396,39 +4404,40 @@ end subroutine uwshcu_readnl
      rlwp_out(i)                  = rlwp
      riwp_out(i)                  = riwp
 
-     wu_out(i,mkx:0:-1)           = wu(0:mkx)
-     qtu_out(i,mkx:0:-1)          = qtu(0:mkx)
-     thlu_out(i,mkx:0:-1)         = thlu(0:mkx)
-     thvu_out(i,mkx:0:-1)         = thvu(0:mkx)
-     uu_out(i,mkx:0:-1)           = uu(0:mkx)
-     vu_out(i,mkx:0:-1)           = vu(0:mkx)
-     qtu_emf_out(i,mkx:0:-1)      = qtu_emf(0:mkx)
-     thlu_emf_out(i,mkx:0:-1)     = thlu_emf(0:mkx)
-     uu_emf_out(i,mkx:0:-1)       = uu_emf(0:mkx)
-     vu_emf_out(i,mkx:0:-1)       = vu_emf(0:mkx)
-     uemf_out(i,mkx:0:-1)         = uemf(0:mkx)
+     wu_out(mkx:0:-1,i)           = wu(0:mkx)
+     qtu_out(mkx:0:-1,i)          = qtu(0:mkx)
+     thlu_out(mkx:0:-1,i)         = thlu(0:mkx)
+     thvu_out(mkx:0:-1,i)         = thvu(0:mkx)
+     uu_out(mkx:0:-1,i)           = uu(0:mkx)
+     vu_out(mkx:0:-1,i)           = vu(0:mkx)
+     qtu_emf_out(mkx:0:-1,i)      = qtu_emf(0:mkx)
+     thlu_emf_out(mkx:0:-1,i)     = thlu_emf(0:mkx)
+     uu_emf_out(mkx:0:-1,i)       = uu_emf(0:mkx)
+     vu_emf_out(mkx:0:-1,i)       = vu_emf(0:mkx)
+     uemf_out(mkx:0:-1,i)         = uemf(0:mkx)
 
-     dwten_out(i,mkx:1:-1)        = dwten(:mkx)
-     diten_out(i,mkx:1:-1)        = diten(:mkx)
-     flxrain_out(i,mkx:0:-1)      = flxrain(0:mkx)
-     flxsnow_out(i,mkx:0:-1)      = flxsnow(0:mkx)
-     ntraprd_out(i,mkx:1:-1)      = ntraprd(:mkx)
-     ntsnprd_out(i,mkx:1:-1)      = ntsnprd(:mkx)
+     dwten_out(mkx:1:-1,i)        = dwten(:mkx)
+     diten_out(mkx:1:-1,i)        = diten(:mkx)
+     flxrain_out(mkx:0:-1,i)      = flxrain(0:mkx)
+     flxsnow_out(mkx:0:-1,i)      = flxsnow(0:mkx)
+     ntraprd_out(mkx:1:-1,i)      = ntraprd(:mkx)
+     ntsnprd_out(mkx:1:-1,i)      = ntsnprd(:mkx)
 
-     excessu_arr_out(i,mkx:1:-1)  = excessu_arr(:mkx)
-     excess0_arr_out(i,mkx:1:-1)  = excess0_arr(:mkx)
-     xc_arr_out(i,mkx:1:-1)       = xc_arr(:mkx)
-     aquad_arr_out(i,mkx:1:-1)    = aquad_arr(:mkx)
-     bquad_arr_out(i,mkx:1:-1)    = bquad_arr(:mkx)
-     cquad_arr_out(i,mkx:1:-1)    = cquad_arr(:mkx)
-     bogbot_arr_out(i,mkx:1:-1)   = bogbot_arr(:mkx)
-     bogtop_arr_out(i,mkx:1:-1)   = bogtop_arr(:mkx)
+     excessu_arr_out(mkx:1:-1,i)  = excessu_arr(:mkx)
+     excess0_arr_out(mkx:1:-1,i)  = excess0_arr(:mkx)
+     xc_arr_out(mkx:1:-1,i)       = xc_arr(:mkx)
+     aquad_arr_out(mkx:1:-1,i)    = aquad_arr(:mkx)
+     bquad_arr_out(mkx:1:-1,i)    = bquad_arr(:mkx)
+     cquad_arr_out(mkx:1:-1,i)    = cquad_arr(:mkx)
+     bogbot_arr_out(mkx:1:-1,i)   = bogbot_arr(:mkx)
+     bogtop_arr_out(mkx:1:-1,i)   = bogtop_arr(:mkx)
 
      do m = 1, ncnst
-        trflx_out(i,mkx:0:-1,m)   = trflx(0:mkx,m)  
-        tru_out(i,mkx:0:-1,m)     = tru(0:mkx,m)
-        tru_emf_out(i,mkx:0:-1,m) = tru_emf(0:mkx,m)
+        trflx_out(mkx:0:-1,i,m)   = trflx(0:mkx,m)  
+        tru_out(mkx:0:-1,i,m)     = tru(0:mkx,m)
+        tru_emf_out(mkx:0:-1,i,m) = tru_emf(0:mkx,m)
      enddo
+
  333 if(id_exit) then ! Exit without cumulus convection
 
      exit_UWCu(i) = 1._r8
@@ -4437,41 +4446,40 @@ end subroutine uwshcu_readnl
      ! Initialize output variables when cumulus convection was not performed.!
      ! --------------------------------------------------------------------- !
      
-
-     umf_out(i,0:mkx)             = 0._r8   
-     slflx_out(i,0:mkx)           = 0._r8
-     qtflx_out(i,0:mkx)           = 0._r8
-     qvten_out(i,:mkx)            = 0._r8
-     qlten_out(i,:mkx)            = 0._r8
-     qiten_out(i,:mkx)            = 0._r8
-     sten_out(i,:mkx)             = 0._r8
-     uten_out(i,:mkx)             = 0._r8
-     vten_out(i,:mkx)             = 0._r8
-     qrten_out(i,:mkx)            = 0._r8
-     qsten_out(i,:mkx)            = 0._r8
+     umf_out(0:mkx,i)             = 0._r8   
+     slflx_out(0:mkx,i)           = 0._r8
+     qtflx_out(0:mkx,i)           = 0._r8
+     qvten_out(:mkx,i)            = 0._r8
+     qlten_out(:mkx,i)            = 0._r8
+     qiten_out(:mkx,i)            = 0._r8
+     sten_out(:mkx,i)             = 0._r8
+     uten_out(:mkx,i)             = 0._r8
+     vten_out(:mkx,i)             = 0._r8
+     qrten_out(:mkx,i)            = 0._r8
+     qsten_out(:mkx,i)            = 0._r8
      precip_out(i)                = 0._r8
      snow_out(i)                  = 0._r8
-     evapc_out(i,:mkx)            = 0._r8
-     cufrc_out(i,:mkx)            = 0._r8
-     qcu_out(i,:mkx)              = 0._r8
-     qlu_out(i,:mkx)              = 0._r8
-     qiu_out(i,:mkx)              = 0._r8
+     evapc_out(:mkx,i)            = 0._r8
+     cufrc_out(:mkx,i)            = 0._r8
+     qcu_out(:mkx,i)              = 0._r8
+     qlu_out(:mkx,i)              = 0._r8
+     qiu_out(:mkx,i)              = 0._r8
      cush_inout(i)                = -1._r8
      cbmf_out(i)                  = 0._r8   
      rliq_out(i)                  = 0._r8
-     qc_out(i,:mkx)               = 0._r8
+     qc_out(:mkx,i)               = 0._r8
      cnt_out(i)                   = 1._r8
      cnb_out(i)                   = real(mkx, r8)
 
-     fer_out(i,mkx:1:-1)          = 0._r8  
-     fdr_out(i,mkx:1:-1)          = 0._r8  
+     fer_out(mkx:1:-1,i)          = 0._r8  
+     fdr_out(mkx:1:-1,i)          = 0._r8  
      cinh_out(i)                  = -1._r8 
      cinlclh_out(i)               = -1._r8 
-     qtten_out(i,mkx:1:-1)        = 0._r8
-     slten_out(i,mkx:1:-1)        = 0._r8
-     ufrc_out(i,mkx:0:-1)         = 0._r8
-     uflx_out(i,mkx:0:-1)         = 0._r8  
-     vflx_out(i,mkx:0:-1)         = 0._r8  
+     qtten_out(mkx:1:-1,i)        = 0._r8
+     slten_out(mkx:1:-1,i)        = 0._r8
+     ufrc_out(mkx:0:-1,i)         = 0._r8
+     uflx_out(mkx:0:-1,i)         = 0._r8  
+     vflx_out(mkx:0:-1,i)         = 0._r8  
 
      ufrcinvbase_out(i)           = 0._r8 
      ufrclcl_out(i)               = 0._r8 
@@ -4493,52 +4501,149 @@ end subroutine uwshcu_readnl
      rlwp_out(i)                  = 0._r8    
      riwp_out(i)                  = 0._r8    
 
-     wu_out(i,mkx:0:-1)           = 0._r8    
-     qtu_out(i,mkx:0:-1)          = 0._r8        
-     thlu_out(i,mkx:0:-1)         = 0._r8         
-     thvu_out(i,mkx:0:-1)         = 0._r8         
-     uu_out(i,mkx:0:-1)           = 0._r8        
-     vu_out(i,mkx:0:-1)           = 0._r8        
-     qtu_emf_out(i,mkx:0:-1)      = 0._r8         
-     thlu_emf_out(i,mkx:0:-1)     = 0._r8         
-     uu_emf_out(i,mkx:0:-1)       = 0._r8          
-     vu_emf_out(i,mkx:0:-1)       = 0._r8    
-     uemf_out(i,mkx:0:-1)         = 0._r8    
+     wu_out(mkx:0:-1,i)           = 0._r8    
+     qtu_out(mkx:0:-1,i)          = 0._r8        
+     thlu_out(mkx:0:-1,i)         = 0._r8         
+     thvu_out(mkx:0:-1,i)         = 0._r8         
+     uu_out(mkx:0:-1,i)           = 0._r8        
+     vu_out(mkx:0:-1,i)           = 0._r8        
+     qtu_emf_out(mkx:0:-1,i)      = 0._r8         
+     thlu_emf_out(mkx:0:-1,i)     = 0._r8         
+     uu_emf_out(mkx:0:-1,i)       = 0._r8          
+     vu_emf_out(mkx:0:-1,i)       = 0._r8    
+     uemf_out(mkx:0:-1,i)         = 0._r8    
    
-     dwten_out(i,mkx:1:-1)        = 0._r8    
-     diten_out(i,mkx:1:-1)        = 0._r8    
-     flxrain_out(i,mkx:0:-1)      = 0._r8     
-     flxsnow_out(i,mkx:0:-1)      = 0._r8    
-     ntraprd_out(i,mkx:1:-1)      = 0._r8    
-     ntsnprd_out(i,mkx:1:-1)      = 0._r8    
+     dwten_out(mkx:1:-1,i)        = 0._r8    
+     diten_out(mkx:1:-1,i)        = 0._r8    
+     flxrain_out(mkx:0:-1,i)      = 0._r8     
+     flxsnow_out(mkx:0:-1,i)      = 0._r8    
+     ntraprd_out(mkx:1:-1,i)      = 0._r8    
+     ntsnprd_out(mkx:1:-1,i)      = 0._r8    
 
-     excessu_arr_out(i,mkx:1:-1)  = 0._r8    
-     excess0_arr_out(i,mkx:1:-1)  = 0._r8    
-     xc_arr_out(i,mkx:1:-1)       = 0._r8    
-     aquad_arr_out(i,mkx:1:-1)    = 0._r8    
-     bquad_arr_out(i,mkx:1:-1)    = 0._r8    
-     cquad_arr_out(i,mkx:1:-1)    = 0._r8    
-     bogbot_arr_out(i,mkx:1:-1)   = 0._r8    
-     bogtop_arr_out(i,mkx:1:-1)   = 0._r8    
+     excessu_arr_out(mkx:1:-1,i)  = 0._r8    
+     excess0_arr_out(mkx:1:-1,i)  = 0._r8    
+     xc_arr_out(mkx:1:-1,i)       = 0._r8    
+     aquad_arr_out(mkx:1:-1,i)    = 0._r8    
+     bquad_arr_out(mkx:1:-1,i)    = 0._r8    
+     cquad_arr_out(mkx:1:-1,i)    = 0._r8    
+     bogbot_arr_out(mkx:1:-1,i)   = 0._r8    
+     bogtop_arr_out(mkx:1:-1,i)   = 0._r8    
 
      do m = 1, ncnst
-        trten_out(i,:mkx,m)       = 0._r8
-        trflx_out(i,mkx:0:-1,m)   = 0._r8  
-        tru_out(i,mkx:0:-1,m)     = 0._r8
-        tru_emf_out(i,mkx:0:-1,m) = 0._r8
+        trten_out(:mkx,i,m)       = 0._r8
+        trflx_out(mkx:0:-1,i,m)   = 0._r8  
+        tru_out(mkx:0:-1,i,m)     = 0._r8
+        tru_emf_out(mkx:0:-1,i,m) = 0._r8
      enddo
-
      end if
 
      end do                  ! end of big i loop for each column.
      !$omp end parallel do
      t1_end_time = omp_get_wtime()
-     timeForShallowConvectionLoop = t1_end_time - t1_start_time
+     timeForShallowConvectionLoop = (t1_end_time - t1_start_time)
+
 
      ! ---------------------------------------- !
      ! Writing main diagnostic output variables !
      ! ---------------------------------------- !
 
+     !call outfld( 'qtflx_Cu'        , qtflx_out(:,mkx:0:-1),    mix,    lchnk ) 
+     !call outfld( 'slflx_Cu'        , slflx_out(:,mkx:0:-1),    mix,    lchnk ) 
+     !call outfld( 'uflx_Cu'         , uflx_out,                 mix,    lchnk ) 
+     !call outfld( 'vflx_Cu'         , vflx_out,                 mix,    lchnk ) 
+
+     !call outfld( 'qtten_Cu'        , qtten_out,                mix,    lchnk ) 
+     !call outfld( 'slten_Cu'        , slten_out,                mix,    lchnk ) 
+     !call outfld( 'uten_Cu'         , uten_out(:,mkx:1:-1),     mix,    lchnk ) 
+     !call outfld( 'vten_Cu'         , vten_out(:,mkx:1:-1),     mix,    lchnk ) 
+     !call outfld( 'qvten_Cu'        , qvten_out(:,mkx:1:-1),    mix,    lchnk ) 
+     !call outfld( 'qlten_Cu'        , qlten_out(:,mkx:1:-1),    mix,    lchnk )
+     !call outfld( 'qiten_Cu'        , qiten_out(:,mkx:1:-1),    mix,    lchnk )   
+
+     !call outfld( 'cbmf_Cu'         , cbmf_out,                 mix,    lchnk ) 
+     !call outfld( 'ufrcinvbase_Cu'  , ufrcinvbase_out,          mix,    lchnk ) 
+     !call outfld( 'ufrclcl_Cu'      , ufrclcl_out,              mix,    lchnk ) 
+     !call outfld( 'winvbase_Cu'     , winvbase_out,             mix,    lchnk ) 
+     !call outfld( 'wlcl_Cu'         , wlcl_out,                 mix,    lchnk ) 
+     !call outfld( 'plcl_Cu'         , plcl_out,                 mix,    lchnk ) 
+     !call outfld( 'pinv_Cu'         , pinv_out,                 mix,    lchnk ) 
+     !call outfld( 'plfc_Cu'         , plfc_out,                 mix,    lchnk ) 
+     !call outfld( 'pbup_Cu'         , pbup_out,                 mix,    lchnk ) 
+     !call outfld( 'ppen_Cu'         , ppen_out,                 mix,    lchnk ) 
+     !call outfld( 'qtsrc_Cu'        , qtsrc_out,                mix,    lchnk ) 
+     !call outfld( 'thlsrc_Cu'       , thlsrc_out,               mix,    lchnk ) 
+     !call outfld( 'thvlsrc_Cu'      , thvlsrc_out,              mix,    lchnk ) 
+     !call outfld( 'emfkbup_Cu'      , emfkbup_out,              mix,    lchnk )
+     !call outfld( 'cin_Cu'          , cinh_out,                 mix,    lchnk )  
+     !call outfld( 'cinlcl_Cu'       , cinlclh_out,              mix,    lchnk ) 
+     !call outfld( 'cbmflimit_Cu'    , cbmflimit_out,            mix,    lchnk ) 
+     !call outfld( 'tkeavg_Cu'       , tkeavg_out,               mix,    lchnk )
+     !call outfld( 'zinv_Cu'         , zinv_out,                 mix,    lchnk )  
+     !call outfld( 'rcwp_Cu'         , rcwp_out,                 mix,    lchnk )
+     !call outfld( 'rlwp_Cu'         , rlwp_out,                 mix,    lchnk )
+     !call outfld( 'riwp_Cu'         , riwp_out,                 mix,    lchnk )
+     !call outfld( 'tophgt_Cu'       , cush_inout,               mix,    lchnk )   
+
+     !call outfld( 'wu_Cu'           , wu_out,                   mix,    lchnk )
+     !call outfld( 'ufrc_Cu'         , ufrc_out,                 mix,    lchnk )
+     !call outfld( 'qtu_Cu'          , qtu_out,                  mix,    lchnk )
+     !call outfld( 'thlu_Cu'         , thlu_out,                 mix,    lchnk )
+     !call outfld( 'thvu_Cu'         , thvu_out,                 mix,    lchnk )
+     !call outfld( 'uu_Cu'           , uu_out,                   mix,    lchnk )
+     !call outfld( 'vu_Cu'           , vu_out,                   mix,    lchnk )
+     !call outfld( 'qtu_emf_Cu'      , qtu_emf_out,              mix,    lchnk )
+     !call outfld( 'thlu_emf_Cu'     , thlu_emf_out,             mix,    lchnk )
+     !call outfld( 'uu_emf_Cu'       , uu_emf_out,               mix,    lchnk )
+     !call outfld( 'vu_emf_Cu'       , vu_emf_out,               mix,    lchnk )
+     !call outfld( 'umf_Cu'          , umf_out(:,mkx:0:-1),      mix,    lchnk )
+     !call outfld( 'uemf_Cu'         , uemf_out,                 mix,    lchnk )
+     !call outfld( 'qcu_Cu'          , qcu_out(:,mkx:1:-1),      mix,    lchnk )
+     !call outfld( 'qlu_Cu'          , qlu_out(:,mkx:1:-1),      mix,    lchnk )
+     !call outfld( 'qiu_Cu'          , qiu_out(:,mkx:1:-1),      mix,    lchnk )
+     !call outfld( 'cufrc_Cu'        , cufrc_out(:,mkx:1:-1),    mix,    lchnk )  
+     !call outfld( 'fer_Cu'          , fer_out,                  mix,    lchnk )  
+     !call outfld( 'fdr_Cu'          , fdr_out,                  mix,    lchnk )  
+
+     !call outfld( 'dwten_Cu'        , dwten_out,                mix,    lchnk )
+     !call outfld( 'diten_Cu'        , diten_out,                mix,    lchnk )
+     !call outfld( 'qrten_Cu'        , qrten_out(:,mkx:1:-1),    mix,    lchnk )
+     !call outfld( 'qsten_Cu'        , qsten_out(:,mkx:1:-1),    mix,    lchnk )
+     !call outfld( 'flxrain_Cu'      , flxrain_out,              mix,    lchnk )
+     !call outfld( 'flxsnow_Cu'      , flxsnow_out,              mix,    lchnk )
+     !call outfld( 'ntraprd_Cu'      , ntraprd_out,              mix,    lchnk )
+     !call outfld( 'ntsnprd_Cu'      , ntsnprd_out,              mix,    lchnk )
+
+     !call outfld( 'excessu_Cu'      , excessu_arr_out,          mix,    lchnk )
+     !call outfld( 'excess0_Cu'      , excess0_arr_out,          mix,    lchnk )
+     !call outfld( 'xc_Cu'           , xc_arr_out,               mix,    lchnk )
+     !call outfld( 'aquad_Cu'        , aquad_arr_out,            mix,    lchnk )
+     !call outfld( 'bquad_Cu'        , bquad_arr_out,            mix,    lchnk )
+     !call outfld( 'cquad_Cu'        , cquad_arr_out,            mix,    lchnk )
+     !call outfld( 'bogbot_Cu'       , bogbot_arr_out,           mix,    lchnk )
+     !call outfld( 'bogtop_Cu'       , bogtop_arr_out,           mix,    lchnk )
+
+     !call outfld( 'exit_UWCu_Cu'    , exit_UWCu,                mix,    lchnk ) 
+     !call outfld( 'exit_conden_Cu'  , exit_conden,              mix,    lchnk ) 
+     !call outfld( 'exit_klclmkx_Cu' , exit_klclmkx,             mix,    lchnk ) 
+     !call outfld( 'exit_klfcmkx_Cu' , exit_klfcmkx,             mix,    lchnk ) 
+     !call outfld( 'exit_ufrc_Cu'    , exit_ufrc,                mix,    lchnk ) 
+     !call outfld( 'exit_wtw_Cu'     , exit_wtw,                 mix,    lchnk ) 
+     !call outfld( 'exit_drycore_Cu' , exit_drycore,             mix,    lchnk ) 
+     !call outfld( 'exit_wu_Cu'      , exit_wu,                  mix,    lchnk ) 
+     !call outfld( 'exit_cufilter_Cu', exit_cufilter,            mix,    lchnk ) 
+     !call outfld( 'exit_kinv1_Cu'   , exit_kinv1,               mix,    lchnk ) 
+     !call outfld( 'exit_rei_Cu'     , exit_rei,                 mix,    lchnk ) 
+
+     !call outfld( 'limit_shcu_Cu'   , limit_shcu,               mix,    lchnk ) 
+     !call outfld( 'limit_negcon_Cu' , limit_negcon,             mix,    lchnk ) 
+     !call outfld( 'limit_ufrc_Cu'   , limit_ufrc,               mix,    lchnk ) 
+     !call outfld( 'limit_ppen_Cu'   , limit_ppen,               mix,    lchnk ) 
+     !call outfld( 'limit_emf_Cu'    , limit_emf,                mix,    lchnk ) 
+     !call outfld( 'limit_cinlcl_Cu' , limit_cinlcl,             mix,    lchnk ) 
+     !call outfld( 'limit_cin_Cu'    , limit_cin,                mix,    lchnk ) 
+     !call outfld( 'limit_cbmf_Cu'   , limit_cbmf,               mix,    lchnk ) 
+     !call outfld( 'limit_rei_Cu'    , limit_rei,                mix,    lchnk ) 
+     !call outfld( 'ind_delcin_Cu'   , ind_delcin,               mix,    lchnk ) 
 
     return
 
@@ -4619,8 +4724,16 @@ end subroutine uwshcu_readnl
     real(r8)              :: es              ! Saturation vapor pressure
     real(r8)              :: qs              ! Saturation spec. humidity
 
+    !Temp variables for optimizing
+    real(r8) :: exnf_p
+    real(r8) :: cp_by_leff
+    real(r8) :: bunch_of_constants
 
-    tc   = thl*exnf(p)
+    exnf_p = exnf(p)
+
+    tc   = thl*exnf_p
+    !tc   = thl*exnf(p)
+
   ! Modification : In order to be compatible with the dlf treatment in stratiform.F90,
   !                we may use ( 268.15, 238.15 ) with 30K ramping instead of 20 K,
   !                in computing ice fraction below. 
@@ -4634,6 +4747,9 @@ end subroutine uwshcu_readnl
     ! NOT "liquid temperature".                                                   !
     ! --------------------------------------------------------------------------- !
 
+    cp_by_leff = cp/leff
+    bunch_of_constants = ep2*leff
+
     temps  = tc
     call qsat(temps, p, es, qs)
     rvls   = qs
@@ -4644,10 +4760,11 @@ end subroutine uwshcu_readnl
         qc = 0._r8
         ql = 0._r8
         qi = 0._r8
-        th = tc/exnf(p)
+        !th = tc/exnf(p)
+        th = tc/exnf_p
     else 
         do iteration = 1, 10
-           temps  = temps + ( (tc-temps)*cp/leff + qt - rvls )/( cp/leff + ep2*leff*rvls/r/temps/temps )
+           temps  = temps + ( (tc-temps)*cp/leff + qt - rvls )/( cp_by_leff + bunch_of_constants*rvls/(r*temps*temps) )
            call qsat(temps, p, es, qs)
            rvls   = qs
         end do
@@ -4655,7 +4772,8 @@ end subroutine uwshcu_readnl
         qv = qt - qc
         ql = qc*(1._r8 - nu)
         qi = nu*qc
-        th = temps/exnf(p)
+        !th = temps/exnf(p)
+        th = temps/exnf_p
         if( abs((temps-(leff/cp)*qc)-tc) .ge. 1._r8 ) then
             id_check = 1
         else
